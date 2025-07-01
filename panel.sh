@@ -1,179 +1,158 @@
 #!/bin/bash
-set -e
 
-# Update package lists and upgrade the system
-apt-get update
-apt-get upgrade -y
+# Jexactyl Installer Script
+LOG_FILE="/var/log/jexactyl_install.log"
+touch "$LOG_FILE"
 
-# Install dependencies
-declare -a packages=(
-    git \
-    curl \
-    wget \
-    sudo \
-    unzip \
-    tar \
-    software-properties-common \
-    mariadb-server \
-    redis-server \
-    nginx \
-    certbot \
-    php8.1 \
-    php8.1-cli \
-    php8.1-fpm \
-    php8.1-mysql \
-    php8.1-gd \
-    php8.1-curl \
-    php8.1-zip \
-    php8.1-xml \
-    php8.1-mbstring \
-    php8.1-bcmath \
-    php8.1-tokenizer \
-    php8.1-opcache
-)
-apt-get install -y ${packages[@]}
+# Function to log commands and their output
+log_command() {
+    echo "Running: $*" | tee -a "$LOG_FILE"
+    if "$@"; then
+        echo "SUCCESS: $*" | tee -a "$LOG_FILE"
+    else
+        echo "ERROR: $* failed. Check $LOG_FILE for details." | tee -a "$LOG_FILE"
+        exit 1
+    fi
+}
 
-# Install Composer
-php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');"
-php composer-setup.php --install-dir=/usr/local/bin --filename=composer
-php -r "unlink('composer-setup.php');"
+echo "Starting Jexactyl installation..." | tee -a "$LOG_FILE"
 
-# Configure Nginx
-rm /etc/nginx/sites-available/default
-rm /etc/nginx/sites-enabled/default
+# Ask for variables
+read -p "Enter your database password for 'jexactyl' user: " DB_PASSWORD
+read -p "Enter your Panel URL (e.g., https://panel.example.com): " PANEL_URL
+read -p "Enter your Panel API Key: " PANEL_API_KEY
+read -p "Enter your Jexactyl instance URL (e.g., https://dash.example.com): " INSTANCE_URL
+read -p "Enter your Jexactyl license key: " LICENSE_KEY
+read -p "Enter your domain for Certbot (e.g., example.com): " DOMAIN
+read -p "Enter your admin account email: " ADMIN_EMAIL
+read -p "Enter PHP version (e.g., 8.3): " PHP_VERSION
 
-cat <<EOF >/etc/nginx/sites-available/jexactyl.conf
+# Web Server Option (Apache or Nginx)
+read -p "Choose your web server (apache/nginx): " WEBSERVER
+
+echo "Updating and upgrading system packages..." | tee -a "$LOG_FILE"
+log_command apt update && apt upgrade -y
+
+# Install necessary dependencies
+echo "Installing dependencies..." | tee -a "$LOG_FILE"
+log_command apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg
+
+if [[ "$WEBSERVER" == "apache" ]]; then
+    log_command apt install apache2 libapache2-mod-php php${PHP_VERSION}-fpm -y
+    # Apache config
+    cat <<EOF > /etc/apache2/sites-available/jexactyl.conf
+<VirtualHost *:80>
+    ServerName $DOMAIN
+    DocumentRoot "/var/www/jexactyl/public"
+    AllowEncodedSlashes On
+    php_value upload_max_filesize 100M
+    php_value post_max_size 100M
+    <Directory "/var/www/jexactyl/public">
+        AllowOverride all
+        Require all granted
+    </Directory>
+</VirtualHost>
+EOF
+    log_command a2ensite jexactyl.conf
+    log_command systemctl reload apache2
+elif [[ "$WEBSERVER" == "nginx" ]]; then
+    log_command apt install nginx php${PHP_VERSION}-fpm -y
+    # Nginx config
+    cat <<EOF > /etc/nginx/sites-available/jexactyl
 server {
     listen 80;
-    server_name _; # Replace with your domain or IP address
+    server_name $DOMAIN;
     root /var/www/jexactyl/public;
-
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header X-Content-Type-Options "nosniff";
-
-    index index.php;
-
+    index index.html index.htm index.php;
     charset utf-8;
-
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
-
-    location = /favicon.ico { access_log off; log_not_found off; }
-    location = /robots.txt  { access_log off; log_not_found off; }
-
-    error_page 404 /index.php;
-
-    location ~ \.php\$ {
-        fastcgi_pass unix:/run/php/php8.1-fpm.sock;
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        fastcgi_pass unix:/run/php/php${PHP_VERSION}-fpm.sock;
         fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
         include fastcgi_params;
-    }
-
-    location ~ /\.ht {
-        deny all;
     }
 }
 EOF
+    log_command ln -s /etc/nginx/sites-available/jexactyl /etc/nginx/sites-enabled/
+    log_command systemctl restart nginx
+else
+    echo "Invalid web server choice."
+    exit 1
+fi
 
-ln -s /etc/nginx/sites-available/jexactyl.conf /etc/nginx/sites-enabled/
-nginx -t
-systemctl reload nginx
+# SSL Setup with Certbot (optional)
+read -p "Do you want to enable SSL with Certbot? (yes/no): " ENABLE_SSL
+if [[ "$ENABLE_SSL" == "yes" ]]; then
+    log_command apt install certbot python3-certbot-nginx -y
+    certbot certonly --nginx -d "$DOMAIN"
+    echo "SSL certificates installed successfully." | tee -a "$LOG_FILE"
+else
+    echo "Skipping SSL setup."
+fi
 
-# Secure Nginx with Certbot (optional, but recommended)
-# certbot --nginx -d your_domain.com # Replace your_domain.com
+# Redis Setup (Optional)
+read -p "Do you want to enable Redis? (yes/no): " ENABLE_REDIS
+if [[ "$ENABLE_REDIS" == "yes" ]]; then
+    log_command apt install redis-server -y
+    # Enable Redis if systemd is available
+    if command -v systemctl &> /dev/null; then
+        log_command systemctl enable --now redis-server
+    else
+        log_command service redis-server start
+    fi
+    echo "Redis setup complete." | tee -a "$LOG_FILE"
+fi
 
-# Set up MariaDB database and user
-MYSQL_ROOT_PASSWORD="rootpassword"
-MYSQL_DATABASE="jexactyl"
-MYSQL_USER="jexactyl"
-MYSQL_PASSWORD="jexactylpassword"
+# Install Composer
+echo "Installing Composer..." | tee -a "$LOG_FILE"
+log_command curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-export DEBIAN_FRONTEND=noninteractive
+# Install Yarn
+echo "Installing Yarn..." | tee -a "$LOG_FILE"
+log_command npm install -g yarn
 
-# Note: This is insecure.  For production, use a more robust method for setting MySQL password.
-# Also, be sure to change the root password
+# Setup Jexactyl
+echo "Setting up Jexactyl directory..." | tee -a "$LOG_FILE"
+log_command mkdir -p /var/www/jexactyl
+log_command cd /var/www/jexactyl
+log_command curl -Lo Jexactyl.zip https://github.com/Jexactyl/Jexactyl/releases/latest/download/Jexactyl.zip
+log_command unzip -o Jexactyl.zip
 
-cat <<EOF | mysql -u root
-ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
-DROP DATABASE IF EXISTS 
-CREATE DATABASE IF NOT EXISTS 
-CREATE USER IF NOT EXISTS '
-GRANT ALL PRIVILEGES ON 
+# Set permissions
+echo "Setting permissions..." | tee -a "$LOG_FILE"
+log_command chown -R www-data:www-data /var/www/jexactyl/*
+
+# Run make commands
+echo "Running make commands..." | tee -a "$LOG_FILE"
+log_command cd /var/www/jexactyl
+log_command make set-prod
+log_command make get-frontend
+
+# Create MariaDB user and database
+echo "Creating MariaDB user and database..." | tee -a "$LOG_FILE"
+log_command mariadb -u root -p <<EOF
+CREATE USER 'jexactyl'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
+CREATE DATABASE jexactyl;
+GRANT ALL PRIVILEGES ON jexactyl.* TO 'jexactyl'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
+exit
 EOF
 
-# Download Jexactyl
-cd /var/www
-git clone https://github.com/Jexactyl/Jexactyl.git
-cd jexactyl
+# Run migrations and setup
+echo "Running migrations and setup..." | tee -a "$LOG_FILE"
+log_command php artisan migrate
+log_command php artisan key:generate
 
-# Install PHP dependencies
-composer install --no-dev --optimize-autoloader
+# Create Admin user
+echo "Creating admin user..." | tee -a "$LOG_FILE"
+log_command php artisan make:admin "$ADMIN_EMAIL"
 
-# Set up environment variables
-cp .env.example .env
+# Final setup and permissions
+echo "Finalizing setup..." | tee -a "$LOG_FILE"
+log_command chown -R www-data:www-data /var/www/jexactyl/*
 
-# Generate application key
-php artisan key:generate
-
-# Jexactyl Setup Commands (Interactive)
-php artisan p:environment:setup -f
-php artisan p:environment:database -f
-php artisan p:environment:mail -f
-php artisan p:environment:admin -f
-
-
-# Database setup (Uncomment the below lines to perform migrations and seeders)
-php artisan migrate --seed
-
-
-# Set correct file permissions
-chown -R www-data:www-data /var/www/jexactyl
-chmod -R 755 /var/www/jexactyl/storage
-chmod -R 755 /var/www/jexactyl/bootstrap/cache
-
-# Create systemd service for the queue worker
-cat <<EOF >/etc/systemd/system/pteroq.service
-[Unit]
-Description=Jexactyl Queue Worker
-After=redis-server.service mariadb.service
-
-[Service]
-User=www-data
-Group=www-data
-WorkingDirectory=/var/www/jexactyl
-ExecStart=php artisan queue:work --queue=high,default
-Restart=on-failure
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl enable pteroq
-systemctl start pteroq
-
-# Restart services
-systemctl restart redis
-systemctl restart mariadb
-systemctl restart nginx
-
-# Post-installation message
-cat <<EOF
-+-----------------------------------------------------------------------+
-|                                                                       |
-|                       Jexactyl Installation Complete!                 |
-|                                                                       |
-|  Next Steps:                                                          |
-|                                                                       |
-|  1. Create an administrator account by running:                       |
-|     php artisan p:user:make                                           |
-|     in the /var/www/jexactyl directory.                               |
-|                                                                       |
-|  2. Access the panel in your browser at your server's IP address.    |
-|                                                                       |
-+-----------------------------------------------------------------------+
-EOF
+echo "Jexactyl installation complete!" | tee -a "$LOG_FILE"
+echo "Please navigate to your instance URL: $INSTANCE_URL" | tee -a "$LOG_FILE"
