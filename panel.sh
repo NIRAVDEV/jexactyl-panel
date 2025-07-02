@@ -54,7 +54,7 @@ if [[ "$WEBSERVER" == "apache" ]]; then
 </VirtualHost>
 EOF
     log_command a2ensite jexactyl.conf
-    log_command service apache2 reload
+    log_command service apache2 restart
 elif [[ "$WEBSERVER" == "nginx" ]]; then
     log_command apt install nginx php${PHP_VERSION}-fpm -y
     # Nginx config
