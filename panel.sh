@@ -110,10 +110,6 @@ fi
 echo "Installing Composer..." | tee -a "$LOG_FILE"
 log_command curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Install Yarn
-echo "Installing Yarn..." | tee -a "$LOG_FILE"
-# log_command npm install -g yarn
-# add checks to see if yarn is already installed or not
 
 # Setup Jexactyl
 echo "Setting up Jexactyl directory..." | tee -a "$LOG_FILE"
