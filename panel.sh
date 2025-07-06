@@ -329,58 +329,50 @@ configure_apache() {
 
 
 setup_queue_worker() {
-    log_info "Setting up Jexactyl Queue Worker..."
-    QUEUE_WORKER_SERVICE="
-[Unit]
-Description=Jexactyl Queue Worker
-After=mariadb.service redis-server.service
-
-[Service]
-User=www-data
-Group=www-data
-Restart=always
-ExecStart=/usr/bin/php $JEXACTYL_DIR/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3
-StartLimitInterval=180
-StartLimitBurst=30
-RestartSec=5s
-
-[Install]
-WantedBy=multi-user.target
-"
-    # Adjust user/group for CentOS/RHEL
-    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        QUEUE_WORKER_SERVICE="${QUEUE_WORKER_SERVICE/User=www-data/User=apache}"
-        QUEUE_WORKER_SERVICE="${QUEUE_WORKER_SERVICE/Group=www-data/Group=apache}"
-    fi
-
-    echo "$QUEUE_WORKER_SERVICE" > "/etc/systemd/system/jexactyl-queue.service"
-    service daemon-reload restart
-    service jexactyl-queue start
-    log_info "Jexactyl Queue Worker setup successfully."
+    log_warning "Systemd not detected as init system. Cannot set up queue worker as a systemd service."
+    log_warning "You will need to manually configure the Jexactyl queue worker for persistent operation."
+    log_warning "RECOMMENDED: Use Supervisor for robust process management."
+    log_warning "Installation for Supervisor:"
+    log_warning "  sudo apt install -y supervisor"
+    log_warning "Then, create a config file like /etc/supervisor/conf.d/jexactyl.conf with content similar to:"
+    log_warning "  [program:jexactyl-queue]"
+    log_warning "  command=/usr/bin/php $JEXACTYL_DIR/artisan queue:work --queue=high,standard,low --sleep=3 --tries=3"
+    log_warning "  process_name=%(program_name)s_%(process_num)02d"
+    log_warning "  autostart=true"
+    log_warning "  autorestart=true"
+    log_warning "  user=www-data"
+    log_warning "  numprocs=1"
+    log_warning "  redirect_stderr=true"
+    log_warning "  stdout_logfile=/var/www/jexactyl/storage/logs/queue_worker.log"
+    log_warning "  stopwaitsecs=3600"
+    log_warning "After creating the file, run:"
+    log_warning "  sudo systemctl enable supervisor # Or service supervisor enable/start if systemctl works for supervisor"
+    log_warning "  sudo service supervisor restart"
+    log_warning "  sudo supervisorctl reread"
+    log_warning "  sudo supervisorctl update"
+    log_warning "  sudo supervisorctl start jexactyl-queue"
+    log_warning "Alternative (less robust): Set up a cron job for the Laravel scheduler and run 'php artisan queue:work' using 'screen' or 'nohup'."
+    log_warning "  Cron: * * * * * cd $JEXACTYL_DIR && /usr/bin/php artisan schedule:run >> /dev/null 2>&1"
 }
+
+
 
 setup_ssl() {
     log_info "Setting up SSL with Certbot (Let's Encrypt)..."
     if [ "$WEBSERVER_CHOICE" == "nginx" ]; then
         if [ "$PKG_MANAGER" == "apt" ]; then
             apt install -y certbot python3-certbot-nginx
-        elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-            $PKG_MANAGER install -y certbot python3-certbot-nginx
-            # Enable Nginx in firewall for CentOS/RHEL if not already
-            firewall-cmd --permanent --add-service=http --add-service=https
-            firewall-cmd --reload
         fi
         certbot --nginx -d "$DOMAIN" --non-interactive --agree-tos --email "$ADMIN_EMAIL" --redirect --no-eff-email
+        # Use service command for non-systemd environment
+        service nginx restart
     elif [ "$WEBSERVER_CHOICE" == "apache" ]; then
         if [ "$PKG_MANAGER" == "apt" ]; then
             apt install -y certbot python3-certbot-apache
-        elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-            $PKG_MANAGER install -y certbot python3-certbot-apache
-            # Enable Apache in firewall for CentOS/RHEL if not already
-            firewall-cmd --permanent --add-service=http --add-service=https
-            firewall-cmd --reload
         fi
         certbot --apache -d "$DOMAIN" --non-interactive --agree-tos --email "$ADMIN_EMAIL" --redirect --no-eff-email
+        # Use service command for non-systemd environment
+        service apache2 restart
     fi
 
     if [ $? -eq 0 ]; then
