@@ -134,6 +134,10 @@ EOF
 
 #copy .env
 log_command cp .env.example .env
+# Set DB credentials in .env
+sed -i "s/^DB_DATABASE=.*/DB_DATABASE=jexactyl/" .env
+sed -i "s/^DB_USERNAME=.*/DB_USERNAME=jexactyl/" .env
+sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env
 
 # Run migrations and setup
 echo "Running migrations and setup..." | tee -a "$LOG_FILE"
