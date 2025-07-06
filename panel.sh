@@ -77,7 +77,7 @@ server {
 }
 EOF
     log_command ln -s /etc/nginx/sites-available/jexactyl /etc/nginx/sites-enabled/
-    log_command systemctl restart nginx
+    log_command service nginx restart
 else
     echo "Invalid web server choice."
     exit 1
@@ -97,11 +97,7 @@ fi
 read -p "Do you want to enable Redis? (yes/no): " ENABLE_REDIS
 if [[ "$ENABLE_REDIS" == "yes" ]]; then
     log_command apt install redis-server -y
-    # Enable Redis if systemd is available
-    if command -v systemctl &> /dev/null; then
-        log_command systemctl enable --now redis-server
-    else
-        log_command service redis-server start
+    log_command service redis-server start
     fi
     echo "Redis setup complete." | tee -a "$LOG_FILE"
 fi
