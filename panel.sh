@@ -109,19 +109,6 @@ log_command cd /var/www/jexactyl
 log_command curl -Lo panel.tar.gz https://github.com/jexactyl/jexactyl/releases/latest/download/panel.tar.gz 
 log_command tar -xzvf panel.tar.gz 
 log_command chmod -R 755 storage/* bootstrap/cache/
-# Ensure unzip is installed
-if ! command -v unzip &> /dev/null; then
-    echo "Unzip not found. Installing..."
-    apt install unzip -y
-fi
-
-# Unzip Jexactyl.zip if it exists
-if [ -f "Jexactyl.zip" ]; then
-    log_command unzip -o Jexactyl.zip
-else
-    echo "❌ Jexactyl.zip not found. Please check download step."
-    exit 1
-fi
 
 # Set permissions
 echo "Setting permissions..." | tee -a "$LOG_FILE"
