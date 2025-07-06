@@ -107,7 +107,19 @@ echo "Setting up Jexactyl directory..." | tee -a "$LOG_FILE"
 log_command mkdir -p /var/www/jexactyl
 log_command cd /var/www/jexactyl
 log_command curl -Lo Jexactyl.zip https://github.com/Jexactyl/Jexactyl/releases/latest/download/Jexactyl.zip
-log_command unzip -o Jexactyl.zip
+# Ensure unzip is installed
+if ! command -v unzip &> /dev/null; then
+    echo "Unzip not found. Installing..."
+    apt install unzip -y
+fi
+
+# Unzip Jexactyl.zip if it exists
+if [ -f "Jexactyl.zip" ]; then
+    log_command unzip -o Jexactyl.zip
+else
+    echo "❌ Jexactyl.zip not found. Please check download step."
+    exit 1
+fi
 
 # Set permissions
 echo "Setting permissions..." | tee -a "$LOG_FILE"
