@@ -93,13 +93,9 @@ else
     echo "Skipping SSL setup."
 fi
 
-# Redis Setup (Optional)
-read -p "Do you want to enable Redis? (yes/no): " ENABLE_REDIS
-if [[ "$ENABLE_REDIS" == "yes" ]]; then
-    log_command apt install redis-server -y
-    log_command service redis-server start
-    fi
-    echo "Redis setup complete." | tee -a "$LOG_FILE"
+log_command apt install redis-server -y
+log_command service redis-server start
+echo "Redis setup complete." | tee -a "$LOG_FILE"
 
 # Install Composer
 echo "Installing Composer..." | tee -a "$LOG_FILE"
