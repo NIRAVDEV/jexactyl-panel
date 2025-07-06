@@ -117,8 +117,6 @@ log_command chown -R www-data:www-data /var/www/jexactyl/*
 # Run make commands
 echo "Running make commands..." | tee -a "$LOG_FILE"
 log_command cd /var/www/jexactyl
-log_command make set-prod
-log_command make get-frontend
 
 # Create MariaDB user and database
 echo "Creating MariaDB user and database..." | tee -a "$LOG_FILE"
