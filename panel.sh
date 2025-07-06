@@ -117,6 +117,7 @@ log_command chmod -R 755 storage/* bootstrap/cache/
 # Set permissions
 echo "Setting permissions..." | tee -a "$LOG_FILE"
 log_command chown -R www-data:www-data /var/www/jexactyl/*
+log_command chmod -R 755 storage/* bootstrap/cache/
 
 # Run make commands
 echo "Running make commands..." | tee -a "$LOG_FILE"
@@ -131,9 +132,6 @@ CREATE DATABASE IF NOT EXISTS jexactyl;
 GRANT ALL PRIVILEGES ON jexactyl.* TO 'jexactyl'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
-
-log_command chmod -R 755 storage/* bootstrap/cache/
-log_command chown -R www-data:www-data /var/www/jexactyl/*
 
 # Ensure .env exists
 if [ ! -f ".env" ]; then
