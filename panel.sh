@@ -132,12 +132,32 @@ FLUSH PRIVILEGES;
 exit
 EOF
 
-#copy .env
-log_command cp .env.example .env
-# Set DB credentials in .env
-sed -i "s/^DB_DATABASE=.*/DB_DATABASE=jexactyl/" .env
-sed -i "s/^DB_USERNAME=.*/DB_USERNAME=jexactyl/" .env
-sed -i "s/^DB_PASSWORD=.*/DB_PASSWORD=${DB_PASSWORD}/" .env
+# Ensure .env exists
+if [ ! -f ".env" ]; then
+    log_command cp .env.example .env
+fi
+log_command chmod 644 .env
+
+# Force write Laravel environment variables
+cat <<EOF > .env
+APP_ENV=production
+APP_KEY=
+APP_DEBUG=false
+APP_URL=$INSTANCE_URL
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=jexactyl
+DB_USERNAME=jexactyl
+DB_PASSWORD=$DB_PASSWORD
+
+CACHE_DRIVER=file
+QUEUE_CONNECTION=sync
+SESSION_DRIVER=file
+EOF
+
+log_command php artisan key:generate
 
 # Run migrations and setup
 echo "Running migrations and setup..." | tee -a "$LOG_FILE"
