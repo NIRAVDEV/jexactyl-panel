@@ -125,11 +125,11 @@ log_command cd /var/www/jexactyl
 # Create MariaDB user and database
 echo "Creating MariaDB user and database..." | tee -a "$LOG_FILE"
 log_command mariadb -u root -p <<EOF
+DROP USER IF EXISTS 'jexactyl'@'localhost';
 CREATE USER 'jexactyl'@'localhost' IDENTIFIED BY '$DB_PASSWORD';
-CREATE DATABASE jexactyl;
+CREATE DATABASE IF NOT EXISTS jexactyl;
 GRANT ALL PRIVILEGES ON jexactyl.* TO 'jexactyl'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
-exit
 EOF
 
 # Ensure .env exists
