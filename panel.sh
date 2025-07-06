@@ -160,6 +160,8 @@ EOF
 
 log_command php artisan key:generate
 
+composer install --no-dev --optimize-autoloader
+
 # Run migrations and setup
 echo "Running migrations and setup..." | tee -a "$LOG_FILE"
 log_command php artisan migrate
