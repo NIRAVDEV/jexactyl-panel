@@ -119,10 +119,6 @@ echo "Setting permissions..." | tee -a "$LOG_FILE"
 log_command chown -R www-data:www-data /var/www/jexactyl/*
 log_command chmod -R 755 storage/* bootstrap/cache/
 
-# Run make commands
-echo "Running make commands..." | tee -a "$LOG_FILE"
-log_command cd /var/www/jexactyl
-
 # Create MariaDB user and database
 echo "Creating MariaDB user and database..." | tee -a "$LOG_FILE"
 log_command mariadb -u root -p <<EOF
