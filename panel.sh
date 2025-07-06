@@ -106,7 +106,9 @@ log_command curl -sS https://getcomposer.org/installer | php -- --install-dir=/u
 echo "Setting up Jexactyl directory..." | tee -a "$LOG_FILE"
 log_command mkdir -p /var/www/jexactyl
 log_command cd /var/www/jexactyl
-log_command curl -Lo Jexactyl.zip https://github.com/Jexactyl/Jexactyl/releases/latest/download/Jexactyl.zip
+log_command curl -Lo panel.tar.gz https://github.com/jexactyl/jexactyl/releases/latest/download/panel.tar.gz 
+log_command tar -xzvf panel.tar.gz 
+log_command chmod -R 755 storage/* bootstrap/cache/
 # Ensure unzip is installed
 if ! command -v unzip &> /dev/null; then
     echo "Unzip not found. Installing..."
