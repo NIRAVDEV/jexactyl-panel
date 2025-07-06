@@ -352,7 +352,7 @@ WantedBy=multi-user.target
     fi
 
     echo "$QUEUE_WORKER_SERVICE" > "/etc/systemd/system/jexactyl-queue.service"
-    service daemon-reload
+    service daemon-reload restart
     service jexactyl-queue start
     log_info "Jexactyl Queue Worker setup successfully."
 }
