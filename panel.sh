@@ -5,7 +5,7 @@
 
 # --- Global Variables ---
 JEXACTYL_DIR="/var/www/jexactyl"
-PHP_VERSION="8.1" # Jexactyl typically requires PHP 8.1 or newer. Adjust if needed.
+PHP_VERSION="8.3" # Jexactyl typically requires PHP 8.1 or newer. Adjust if needed.
 
 # --- Helper Functions ---
 
@@ -248,50 +248,83 @@ server {
 
 configure_apache() {
     log_info "Configuring Apache for Jexactyl Panel..."
-    if [ "$PKG_MANAGER" == "apt" ]; then
-        apt install -y apache2 libapache2-mod-php$PHP_VERSION
-        a2enmod rewrite
-        WEBSERVER_USER="www-data"
-    elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        $PKG_MANAGER install -y httpd php-$PHP_VERSION
+    # Install httpd for CentOS/RHEL/Fedora
+    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
+        $PKG_MANAGER install -y httpd mod_ssl # mod_ssl is good for https later
         WEBSERVER_USER="apache"
+        # Enable required Apache modules for PHP-FPM (often pre-installed or enabled with httpd/php-fpm)
+        # Ensure mod_proxy_fcgi is available and loaded.
+        $PKG_MANAGER install -y mod_proxy_fcgi || true # Try installing, might be included with httpd
+        systemctl enable php-fpm --now # Ensure php-fpm is running
+        PHP_FPM_SOCKET="/run/php-fpm/www.sock" # Default for Remi/CentOS PHP-FPM
+        PHP_FPM_SERVICE="php-fpm"
     fi
 
-    # Ensure Apache user has access
-    chown -R $WEBSERVER_USER:$WEBSERVER_USER $JEXACTYL_DIR
+    # Adjust PHP-FPM user/group if using CentOS/RHEL, assuming www.conf is the default pool
+    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
+        log_info "Adjusting PHP-FPM user/group in /etc/php-fpm.d/www.conf for Apache..."
+        sed -i "s/^user = apache/user = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
+        sed -i "s/^group = apache/group = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
+        sed -i "s/^listen.owner = nobody/listen.owner = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
+        sed -i "s/^listen.group = nobody/listen.group = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
+        # Also ensure listen = /run/php-fpm/www.sock
+        sed -i 's|^listen = 127.0.0.1:9000|listen = /run/php-fpm/www.sock|' /etc/php-fpm.d/www.conf 2>/dev/null || true
 
+        systemctl restart $PHP_FPM_SERVICE
+    fi
+
+    # Apache configuration using PHP-FPM via ProxyPassMatch (recommended for performance)
     APACHE_CONFIG="
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
     ServerName $DOMAIN
-    DocumentRoot $JEXACTYL_DIR/public
+    DocumentRoot \"$JEXACTYL_DIR/public\"
 
-    <Directory $JEXACTYL_DIR/public>
+    # Required for Jexactyl's API routes with encoded slashes
+    AllowEncodedSlashes On
+
+    <Directory \"$JEXACTYL_DIR/public\">
         Options Indexes FollowSymLinks
         AllowOverride All
         Require all granted
     </Directory>
 
+    <FilesMatch \.php$>
+        # For Apache 2.4.10 and above
+        # Note: This connects Apache to PHP-FPM.
+        # PHP settings (like upload_max_filesize) must be in php-fpm's config (e.g., /etc/php-fpm.d/www.conf)
+        SetHandler \"proxy:unix:$PHP_FPM_SOCKET|fcgi://localhost/\"
+    </FilesMatch>
+
     ErrorLog \${APACHE_LOG_DIR}/error.log
     CustomLog \${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
 "
-    if [ "$PKG_MANAGER" == "apt" ]; then
-        echo "$APACHE_CONFIG" > "/etc/apache2/sites-available/$DOMAIN.conf"
-        a2ensite "$DOMAIN.conf"
-        a2dissite 000-default.conf # Disable default site
-        service apache2 restart
-    elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        echo "$APACHE_CONFIG" > "/etc/httpd/conf.d/$DOMAIN.conf"
-        # Enable Apache in firewall for CentOS/RHEL
-        firewall-cmd --permanent --add-service=http --add-service=https
+    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
+        echo "$APACHE_CONFIG" > "/etc/httpd/conf.d/$DOMAIN.conf" # CentOS/RHEL uses conf.d
+        # Ensure httpd can write to PHP-FPM socket (SELinux)
+        if command -v semanage &> /dev/null; then
+            # Temporarily set httpd_t to permissive, or use more targeted booleans
+            semanage permissive -a httpd_t || log_warning "Failed to set httpd_t to permissive. SELinux might cause issues."
+        fi
+        # Open firewall ports
+        firewall-cmd --permanent --add-service=http
+        firewall-cmd --permanent --add-service=https
         firewall-cmd --reload
-        service httpd start
-        service httpd restart
+        systemctl enable httpd --now
+        systemctl restart httpd
     fi
 
     log_info "Apache configured. You can access your panel at http://$DOMAIN"
+    log_warning "IMPORTANT: PHP settings like 'upload_max_filesize' and 'post_max_size' cannot be in the Apache config when using PHP-FPM."
+    log_warning "You must manually add them to your PHP-FPM pool configuration file, e.g.:"
+    log_warning "  For CentOS/RHEL: /etc/php-fpm.d/www.conf"
+    log_warning "  Add these lines under the [www] section or create a new Jexactyl pool:"
+    log_warning "  php_admin_value[upload_max_filesize] = 100M"
+    log_warning "  php_admin_value[post_max_size] = 100M"
+    log_warning "  After editing, restart PHP-FPM: systemctl restart $PHP_FPM_SERVICE"
 }
+
 
 setup_queue_worker() {
     log_info "Setting up Jexactyl Queue Worker..."
