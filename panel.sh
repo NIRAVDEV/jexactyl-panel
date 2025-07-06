@@ -253,32 +253,28 @@ server {
 
 configure_apache() {
     log_info "Configuring Apache for Jexactyl Panel..."
-    # Install httpd for CentOS/RHEL/Fedora
-    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        $PKG_MANAGER install -y httpd mod_ssl # mod_ssl is good for https later
-        WEBSERVER_USER="apache"
-        # Enable required Apache modules for PHP-FPM (often pre-installed or enabled with httpd/php-fpm)
-        # Ensure mod_proxy_fcgi is available and loaded.
-        $PKG_MANAGER install -y mod_proxy_fcgi || true # Try installing, might be included with httpd
-        service php8.2-fpm start # Ensure php-fpm is running
-        PHP_FPM_SOCKET="/run/php-fpm/www.sock" # Default for Remi/CentOS PHP-FPM
-        PHP_FPM_SERVICE="php-fpm"
+    if [ "$PKG_MANAGER" == "apt" ]; then
+        apt install -y apache2 libapache2-mod-fcgid # Install fcgid to connect to PHP-FPM
+        a2enmod rewrite # Ensure rewrite module is enabled
+        a2enmod proxy_fcgi # Enable proxy_fcgi for connecting to PHP-FPM socket
+        a2enmod setenvif # Sometimes needed for PHP-FPM setups
+
+        WEBSERVER_USER="www-data"
+        PHP_FPM_SOCKET="/run/php/php${PHP_VERSION}-fpm.sock" # Standard PHP-FPM socket for Ondrej's PPA
+        PHP_FPM_SERVICE="php${PHP_VERSION}-fpm"
+
+        # Ensure PHP-FPM uses the correct user (should be www-data by default for Ondrej's PPA)
+        log_info "Adjusting PHP-FPM user to $WEBSERVER_USER if necessary..."
+        if [ -f "/etc/php/$PHP_VERSION/fpm/pool.d/www.conf" ]; then
+            sed -i "s/^user = www-data/user = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
+            sed -i "s/^group = www-data/group = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
+            sed -i "s/^listen.owner = www-data/listen.owner = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
+            sed -i "s/^listen.group = www-data/listen.group = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
+        fi
+        systemctl restart $PHP_FPM_SERVICE # Restart PHP-FPM to apply user/group changes
     fi
 
-    # Adjust PHP-FPM user/group if using CentOS/RHEL, assuming www.conf is the default pool
-    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        log_info "Adjusting PHP-FPM user/group in /etc/php-fpm.d/www.conf for Apache..."
-        sed -i "s/^user = apache/user = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
-        sed -i "s/^group = apache/group = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
-        sed -i "s/^listen.owner = nobody/listen.owner = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
-        sed -i "s/^listen.group = nobody/listen.group = $WEBSERVER_USER/" /etc/php-fpm.d/www.conf 2>/dev/null || true
-        # Also ensure listen = /run/php-fpm/www.sock
-        sed -i 's|^listen = 127.0.0.1:9000|listen = /run/php-fpm/www.sock|' /etc/php-fpm.d/www.conf 2>/dev/null || true
-
-        service $PHP_FPM_SERVICE restart
-    fi
-
-    # Apache configuration using PHP-FPM via ProxyPassMatch (recommended for performance)
+    # Apache configuration using PHP-FPM via ProxyPassMatch
     APACHE_CONFIG="
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
@@ -295,9 +291,8 @@ configure_apache() {
     </Directory>
 
     <FilesMatch \.php$>
-        # For Apache 2.4.10 and above
-        # Note: This connects Apache to PHP-FPM.
-        # PHP settings (like upload_max_filesize) must be in php-fpm's config (e.g., /etc/php-fpm.d/www.conf)
+        # For Apache 2.4.10 and above with PHP-FPM via Unix socket
+        # PHP settings (like upload_max_filesize) must be in php-fpm's config (e.g., /etc/php/$PHP_VERSION/fpm/pool.d/www.conf)
         SetHandler \"proxy:unix:$PHP_FPM_SOCKET|fcgi://localhost/\"
     </FilesMatch>
 
@@ -305,30 +300,32 @@ configure_apache() {
     CustomLog \${APACHE_LOG_DIR}/access.log combined
 </VirtualHost>
 "
-    if [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
-        echo "$APACHE_CONFIG" > "/etc/httpd/conf.d/$DOMAIN.conf" # CentOS/RHEL uses conf.d
-        # Ensure httpd can write to PHP-FPM socket (SELinux)
-        if command -v semanage &> /dev/null; then
-            # Temporarily set httpd_t to permissive, or use more targeted booleans
-            semanage permissive -a httpd_t || log_warning "Failed to set httpd_t to permissive. SELinux might cause issues."
+    if [ "$PKG_MANAGER" == "apt" ]; then
+        echo "$APACHE_CONFIG" | sudo tee "/etc/apache2/sites-available/$DOMAIN.conf" > /dev/null
+        log_info "Enabling the Apache site: $DOMAIN.conf"
+        a2ensite "$DOMAIN.conf"
+        log_info "Disabling Apache's default site (000-default.conf)..."
+        a2dissite 000-default.conf # Disable default site
+
+        # Use service command since systemctl is not available
+        log_info "Restarting Apache service..."
+        service apache2 restart
+
+        if [ $? -ne 0 ]; then
+            log_error "Failed to restart Apache. Check 'sudo apache2ctl configtest' for syntax errors."
         fi
-        # Open firewall ports
-        firewall-cmd --permanent --add-service=http
-        firewall-cmd --permanent --add-service=https
-        firewall-cmd --reload
-        service httpd start
-        service restart httpd restart
     fi
 
     log_info "Apache configured. You can access your panel at http://$DOMAIN"
     log_warning "IMPORTANT: PHP settings like 'upload_max_filesize' and 'post_max_size' cannot be in the Apache config when using PHP-FPM."
-    log_warning "You must manually add them to your PHP-FPM pool configuration file, e.g.:"
-    log_warning "  For CentOS/RHEL: /etc/php-fpm.d/www.conf"
-    log_warning "  Add these lines under the [www] section or create a new Jexactyl pool:"
+    log_warning "You must manually add them to your PHP-FPM pool configuration file:"
+    log_warning "  For Debian: /etc/php/$PHP_VERSION/fpm/pool.d/www.conf"
+    log_warning "  Add these lines under the [www] section:"
     log_warning "  php_admin_value[upload_max_filesize] = 100M"
     log_warning "  php_admin_value[post_max_size] = 100M"
-    log_warning "  After editing, restart PHP-FPM: systemctl restart $PHP_FPM_SERVICE"
+    log_warning "  After editing, restart PHP-FPM: service $PHP_FPM_SERVICE restart"
 }
+
 
 
 setup_queue_worker() {
