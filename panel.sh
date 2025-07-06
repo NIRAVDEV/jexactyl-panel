@@ -132,6 +132,9 @@ GRANT ALL PRIVILEGES ON jexactyl.* TO 'jexactyl'@'localhost' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 EOF
 
+log_command chmod -R 755 storage/* bootstrap/cache/
+log_command chown -R www-data:www-data /var/www/jexactyl/*
+
 # Ensure .env exists
 if [ ! -f ".env" ]; then
     log_command cp .env.example .env
