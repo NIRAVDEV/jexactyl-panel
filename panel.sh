@@ -132,6 +132,9 @@ FLUSH PRIVILEGES;
 exit
 EOF
 
+#copy .env
+log_command cp .env.example .env
+
 # Run migrations and setup
 echo "Running migrations and setup..." | tee -a "$LOG_FILE"
 log_command php artisan migrate
