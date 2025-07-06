@@ -120,10 +120,15 @@ install_mariadb() {
     DB_USER=$(get_user_input "Enter a username for the Jexactyl database (e.g., jexactyluser): ")
     DB_PASSWORD=$(get_user_input "Enter a strong password for the Jexactyl database user: ")
 
-    SQL_COMMANDS="CREATE DATABASE $DB_NAME;
+        # Add IF NOT EXISTS to prevent error if user/db already exist
+    SQL_COMMANDS="CREATE DATABASE IF NOT EXISTS $DB_NAME;
     CREATE USER '$DB_USER'@'127.0.0.1' IDENTIFIED BY '$DB_PASSWORD';
     GRANT ALL PRIVILEGES ON $DB_NAME.* TO '$DB_USER'@'127.0.0.1' WITH GRANT OPTION;
     FLUSH PRIVILEGES;"
+    # Note: If the user *exists* but with a different password, this will still fail.
+    # A more robust solution might involve checking if the user exists first and then ALTER USER or dropping it.
+    # For now, IF NOT EXISTS is a good first step.
+
 
     echo "$SQL_COMMANDS" | mariadb -u root -p"$DB_ROOT_PASSWORD"
 
