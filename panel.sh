@@ -153,9 +153,9 @@ DB_DATABASE=jexactyl
 DB_USERNAME=jexactyl
 DB_PASSWORD=$DB_PASSWORD
 
-CACHE_DRIVER=file
-QUEUE_CONNECTION=sync
-SESSION_DRIVER=file
+CACHE_DRIVER=redis
+QUEUE_CONNECTION=redis
+SESSION_DRIVER=redis
 EOF
 
 log_command php artisan key:generate
@@ -164,8 +164,8 @@ composer install --no-dev --optimize-autoloader
 
 # Run migrations and setup
 echo "Running migrations and setup..." | tee -a "$LOG_FILE"
-log_command php artisan migrate
 log_command php artisan key:generate
+log_command php artisan migrate
 
 # Create Admin user
 echo "Creating admin user..." | tee -a "$LOG_FILE"
