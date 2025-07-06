@@ -37,6 +37,7 @@ log_command apt update && apt upgrade -y
 echo "Installing dependencies..." | tee -a "$LOG_FILE"
 log_command apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg
 log_command apt install mariadb-client mariadb-server -y
+log_command service mariadb start
 
 if [[ "$WEBSERVER" == "apache" ]]; then
     log_command apt install apache2 libapache2-mod-php php${PHP_VERSION}-fpm -y
