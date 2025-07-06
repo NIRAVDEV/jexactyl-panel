@@ -36,6 +36,8 @@ log_command apt update && apt upgrade -y
 # Install necessary dependencies
 echo "Installing dependencies..." | tee -a "$LOG_FILE"
 log_command apt -y install software-properties-common curl apt-transport-https ca-certificates gnupg
+# Fix: Install required PHP extensions (zip and curl)
+log_command apt install php${PHP_VERSION}-zip php${PHP_VERSION}-curl -y
 log_command apt install mariadb-client mariadb-server -y
 log_command service mariadb start
 
