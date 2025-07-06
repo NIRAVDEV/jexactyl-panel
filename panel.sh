@@ -62,8 +62,11 @@ install_dependencies_ubuntu_debian() {
     apt update -y && apt upgrade -y
     apt install -y software-properties-common curl apt-transport-https ca-certificates gnupg2 unzip git wget redis-server
 
-    log_info "Adding Ondrej PHP PPA..."
-    LC_ALL=C.UTF-8 add-apt-repository -y ppa:ondrej/php
+    log_info "Adding Ondrej PHP repository for Debian $VERSION_ID..."
+    # Correct method for Debian:
+    wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+    echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | tee /etc/apt/sources.list.d/php.list
+
     apt update -y
 
     log_info "Installing PHP $PHP_VERSION and required extensions..."
