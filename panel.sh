@@ -96,7 +96,7 @@ install_dependencies_centos_rhel() {
     curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
     # Start Redis for CentOS/RHEL
-    systemctl enable redis --now
+    service redis start
     log_info "Dependencies installed."
 }
 
@@ -108,7 +108,7 @@ install_mariadb() {
         $PKG_MANAGER install -y mariadb-server mariadb
     fi
 
-    systemctl enable mariadb --now
+    service mariadb start
     log_info "MariaDB installed and started."
 
     log_info "Securing MariaDB installation. You will be prompted to set a root password, remove anonymous users, disallow root login remotely, and remove the test database."
@@ -197,7 +197,7 @@ configure_nginx() {
         sed -i "s/^listen.group = www-data/listen.group = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf
     fi
 
-    systemctl restart $PHP_FPM_SERVICE
+    service $PHP_FPM_SERVICE restart
 
     NGINX_CONFIG="
 server {
@@ -240,8 +240,8 @@ server {
         unlink "/etc/nginx/sites-enabled/default"
     fi
 
-    systemctl enable nginx --now
-    nginx -t && systemctl reload nginx
+    service nginx start
+    nginx -t && service nginx reload
 
     log_info "Nginx configured. You can access your panel at http://$DOMAIN"
 }
@@ -280,14 +280,14 @@ configure_apache() {
         echo "$APACHE_CONFIG" > "/etc/apache2/sites-available/$DOMAIN.conf"
         a2ensite "$DOMAIN.conf"
         a2dissite 000-default.conf # Disable default site
-        systemctl restart apache2
+        service apache2 restart
     elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
         echo "$APACHE_CONFIG" > "/etc/httpd/conf.d/$DOMAIN.conf"
         # Enable Apache in firewall for CentOS/RHEL
         firewall-cmd --permanent --add-service=http --add-service=https
         firewall-cmd --reload
-        systemctl enable httpd --now
-        systemctl restart httpd
+        service httpd start
+        service httpd restart
     fi
 
     log_info "Apache configured. You can access your panel at http://$DOMAIN"
