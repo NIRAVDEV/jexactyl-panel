@@ -255,7 +255,7 @@ configure_apache() {
         # Enable required Apache modules for PHP-FPM (often pre-installed or enabled with httpd/php-fpm)
         # Ensure mod_proxy_fcgi is available and loaded.
         $PKG_MANAGER install -y mod_proxy_fcgi || true # Try installing, might be included with httpd
-        systemctl enable php-fpm --now # Ensure php-fpm is running
+        service php8.2-fpm start # Ensure php-fpm is running
         PHP_FPM_SOCKET="/run/php-fpm/www.sock" # Default for Remi/CentOS PHP-FPM
         PHP_FPM_SERVICE="php-fpm"
     fi
@@ -270,7 +270,7 @@ configure_apache() {
         # Also ensure listen = /run/php-fpm/www.sock
         sed -i 's|^listen = 127.0.0.1:9000|listen = /run/php-fpm/www.sock|' /etc/php-fpm.d/www.conf 2>/dev/null || true
 
-        systemctl restart $PHP_FPM_SERVICE
+        service $PHP_FPM_SERVICE restart
     fi
 
     # Apache configuration using PHP-FPM via ProxyPassMatch (recommended for performance)
@@ -311,8 +311,8 @@ configure_apache() {
         firewall-cmd --permanent --add-service=http
         firewall-cmd --permanent --add-service=https
         firewall-cmd --reload
-        systemctl enable httpd --now
-        systemctl restart httpd
+        service httpd start
+        service restart httpd restart
     fi
 
     log_info "Apache configured. You can access your panel at http://$DOMAIN"
@@ -352,8 +352,8 @@ WantedBy=multi-user.target
     fi
 
     echo "$QUEUE_WORKER_SERVICE" > "/etc/systemd/system/jexactyl-queue.service"
-    systemctl daemon-reload
-    systemctl enable jexactyl-queue --now
+    service daemon-reload
+    service jexactyl-queue start
     log_info "Jexactyl Queue Worker setup successfully."
 }
 
