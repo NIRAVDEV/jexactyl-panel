@@ -5,7 +5,7 @@
 
 # --- Global Variables ---
 JEXACTYL_DIR="/var/www/jexactyl"
-PHP_VERSION="8.4" # Jexactyl typically requires PHP 8.1 or newer. Adjust if needed.
+PHP_VERSION="8.1" # Jexactyl typically requires PHP 8.1 or newer. Adjust if needed.
 
 # --- Helper Functions ---
 
