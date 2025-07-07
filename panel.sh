@@ -229,7 +229,7 @@ configure_nginx() {
 
     NGINX_CONFIG="
 server {
-    listen 80;
+    listen 8080;
     server_name $DOMAIN;
     root $JEXACTYL_DIR/public;
     index index.php index.html index.htm;
@@ -294,12 +294,12 @@ configure_apache() {
             sed -i "s/^listen.owner = www-data/listen.owner = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
             sed -i "s/^listen.group = www-data/listen.group = $WEBSERVER_USER/" /etc/php/$PHP_VERSION/fpm/pool.d/www.conf 2>/dev/null || true
         fi
-        systemctl restart $PHP_FPM_SERVICE # Restart PHP-FPM to apply user/group changes
+        service $PHP_FPM_SERVICE restart # Restart PHP-FPM to apply user/group changes
     fi
 
     # Apache configuration using PHP-FPM via ProxyPassMatch
     APACHE_CONFIG="
-<VirtualHost *:80>
+<VirtualHost *:8080>
     ServerAdmin webmaster@localhost
     ServerName $DOMAIN
     DocumentRoot \"$JEXACTYL_DIR/public\"
