@@ -57,7 +57,7 @@ get_user_input() {
 
 # --- Installation Functions ---
 
-install_dependencies_ubuntu_debian() {
+install_dependencies_ubuntu() {
     log_info "Updating system and installing basic dependencies for Ubuntu/Debian..."
     apt update -y && apt upgrade -y
     apt install -y software-properties-common curl apt-transport-https ca-certificates gnupg2 unzip git wget redis-server
@@ -69,6 +69,26 @@ install_dependencies_ubuntu_debian() {
 
     apt update -y
 
+    log_info "Installing PHP $PHP_VERSION and required extensions..."
+    apt install -y php$PHP_VERSION-cli php$PHP_VERSION-fpm php$PHP_VERSION-mysql php$PHP_VERSION-pdo php$PHP_VERSION-bcmath php$PHP_VERSION-xml php$PHP_VERSION-mbstring php$PHP_VERSION-tokenizer php$PHP_VERSION-json php$PHP_VERSION-gd php$PHP_VERSION-curl php$PHP_VERSION-zip
+
+    log_info "Installing Composer..."
+    curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+
+    log_info "Dependencies installed."
+}
+
+install_dependencies_debian() {
+    log_ino "Updating system and installing basic dependencies for Debian..."
+    apt update -y && apt upgrade -y
+    sudo apt install software-properties-common ca-certificates lsb-release apt-transport-https gnupg2 unzip git wget redis-server
+
+    log_ino "Adding PHP repository for Debain $VERSION_ID..."
+    sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+    sudo apt update
+    wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+
+    apt update -y && apt upgrade -y
     log_info "Installing PHP $PHP_VERSION and required extensions..."
     apt install -y php$PHP_VERSION-cli php$PHP_VERSION-fpm php$PHP_VERSION-mysql php$PHP_VERSION-pdo php$PHP_VERSION-bcmath php$PHP_VERSION-xml php$PHP_VERSION-mbstring php$PHP_VERSION-tokenizer php$PHP_VERSION-json php$PHP_VERSION-gd php$PHP_VERSION-curl php$PHP_VERSION-zip
 
@@ -427,8 +447,10 @@ fi
 # --- Execution Steps ---
 
 log_info "Installing dependencies..."
-if [ "$PKG_MANAGER" == "apt" ]; then
-    install_dependencies_ubuntu_debian
+if [ "$OS" == "debian" ]; then
+     install_dependencies_debian
+elif [ "$OS" == "ubuntu" ]; then
+    install_dependencies_ubuntu
 elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
     install_dependencies_centos_rhel
 fi
