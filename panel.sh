@@ -447,9 +447,9 @@ fi
 # --- Execution Steps ---
 
 log_info "Installing dependencies..."
-if [ "$OS" == "debian" ]; then
-     install_dependencies_debian
-elif [ "$OS" == "ubuntu" ]; then
+#if [ "$OS" == "debian" ]; then
+     #install_dependencies_debian
+if [ "$OS" == "ubuntu" ]; then
      install_dependencies_ubuntu
 elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
      install_dependencies_centos_rhel
