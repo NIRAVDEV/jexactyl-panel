@@ -447,13 +447,13 @@ fi
 # --- Execution Steps ---
 
 log_info "Installing dependencies..."
-# [ "$OS" == "debian" ]; then
+if [ "$OS" == "debian" ]; then
      install_dependencies_debian
-#elif [ "$OS" == "ubuntu" ]; then
- #   install_dependencies_ubuntu
-#elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
- #   install_dependencies_centos_rhel
-#fi
+elif [ "$OS" == "ubuntu" ]; then
+     install_dependencies_ubuntu
+elif [[ "$PKG_MANAGER" == "yum" || "$PKG_MANAGER" == "dnf" ]]; then
+     install_dependencies_centos_rhel
+fi
 
 install_mariadb
 
